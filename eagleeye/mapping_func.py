@@ -49,7 +49,7 @@ class Mapper:
         self.rv, self.tv = self.calPose()
         self.R = cv2.Rodrigues(self.rv)[0]
     
-    # opens the Intrinsic calib xml file
+    # opens/parses the Intrinsic calib xml file. TODO: Does it work for only k3?
     def parseCamIntr(self, xmlpath):
         
         cm, dc = [], []
@@ -111,8 +111,7 @@ class Mapper:
                                 float(dc_dict['k5']), float(dc_dict['k6'])
                             ])
         return cm, dc
-    
-    
+
     def parseTrainer(self, xmlpath):
         trainer = Xmltrainer(xmlpath, self.mode)
         self.num_training = trainer.total

@@ -20,7 +20,7 @@ class Theta:
     
     @staticmethod
     def name(var):
-        return 'NonDual' if var == 0 else 'Backside' if var == 1 else 'Buttonside'
+        return 'NonDual' if var == 0 else 'Backside' if var == 1 or var == 'backside' else 'Buttonside' #added lowercase backside. ~Will.
     
     @staticmethod
     def resolve(var):

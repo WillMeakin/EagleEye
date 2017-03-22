@@ -89,11 +89,12 @@ def main(sysargs):
         xmlfile.write("<!DOCTYPE dataset SYSTEM \"http://storage.gwillz.com.au/eagleeye_v2.dtd\">")
         doc = w.start("dataset")
         
-        # main loop
+        # iterates until all vicon csvs reach eof
         while True:
             w.start("frameInformation")
             w.element("frame", number=str(frame_num))
-            
+
+            #iterates through each vicon csv at the current row
             for i in csvs:
                 c = csvs[i]
                 # determine marker quality
@@ -154,7 +155,7 @@ def main(sysargs):
                 break
             
             
-            # load next frame
+            # load next vicon frame
             frame_num += 1
             for i in csvs:
                 csvs[i].next()

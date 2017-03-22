@@ -241,7 +241,7 @@ __Procedure__
 __Command line Usage__
 
 ```sh
-$ python dualcalib.py -output <file path> <multiple jpg files> {-chess_size <pattern: def. 9,6> | -square_size <in mm: def. 1.0> | -preview <preview file folder> | -config <file>}
+$ python dualcalib.py -output <file path> -buttonside <folderPath\prefix> -backside <folderPath\prefix> {-chess_size <pattern: def. 9,6> | -square_size <in mm: def. cfg then 1.0> | -preview <preview file folder> | -config <file>}
 ```
 
 __Note__

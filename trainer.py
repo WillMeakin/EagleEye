@@ -57,7 +57,7 @@ def main(sysargs):
         usage()
         return 0
     
-    # grab marks from args
+    # grab video flash marks from args
     if len(args) > 5:
         mark_in = args[4]
         mark_out = args[5]
@@ -77,7 +77,7 @@ def main(sysargs):
         usage()
         return 1
     
-    ## clicking time!
+    #How many frames between flashes?
     cropped_total = mark_out - mark_in
     print "video cropped at:", mark_in, "to", mark_out, "- ({} frames)".format(cropped_total)
     
@@ -110,11 +110,13 @@ def main(sysargs):
         
     # load video (again)
     in_vid = BuffSplitCap(args[1], crop=(0,0,0,0), rotate=BuffSplitCap.r0, buff_max=cfg.buffer_size)
-    in_vid.restrict(mark_in, mark_out)
+    in_vid.restrict(mark_in, mark_out) #reels up to flash sync
     
     # load csv (with appropriate ratio)
     in_csv = Memset(args[2])
-    in_csv.restrict()
+    in_csv.restrict() #reels up to flash sync
+    #since Vicon records at higher "framerate" than camera, in_csv.next() jumps forwards by <vicon frame count>/<cam frame count> rows.
+    #TODO: what about variable (vicon) framerate? No average of all within timstamp range?
     in_csv.setRatio(cropped_total)
     
     # test for marker data
@@ -182,7 +184,7 @@ def main(sysargs):
             
             if cfg.ignore_baddata:
                 dataStatus += " Ignored."
-                dataQuality = 1 + cfg.quality_delay
+                dataQuality = 1 + cfg.quality_delay #default quality_delay=2
         
         # draw the trainer dot (if applicable)
         if in_vid.at() in trainer_points[lens]:
@@ -200,22 +202,22 @@ def main(sysargs):
         # pause for input
         while params['status'] == Status.wait:
             key = cv2.waitKey(10)
-            if key == Key.esc:
+            if key == Key.esc:      #don't write anything, exit
                 params['status'] = Status.stop
-            elif key == Key.enter:
+            elif key == Key.enter:  #write groundtruth correspondences xml, exit
                 write_xml = True
                 params['status'] = Status.stop
-            elif key == Key.right:
+            elif key == Key.right:  #next frame
                 params['status'] = Status.skip
-            elif key == Key.left:
+            elif key == Key.left:   #previous frame
                 params['status'] = Status.back
-            elif key == Key.backspace:
+            elif key == Key.backspace:  #remove click point in current frame
                 params['status'] = Status.remove
             elif Key.char(key, '1') and cfg.dual_mode:
-                params['status'] = Status.still
+                params['status'] = Status.still #swap lens
                 lens = Theta.Left
             elif Key.char(key, '2') and cfg.dual_mode:
-                params['status'] = Status.still
+                params['status'] = Status.still #swap lens
                 lens = Theta.Right
             
         # catch exit status

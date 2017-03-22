@@ -58,14 +58,14 @@ http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_calib3d/
 def stdCalib(imagesArr, patternSize=(9,6), squareSize=1.0, preview_path=False, flags=[]):
     print '\n------- Camera Calibration (Standard - Pinhole Camera) --------'
 
-    # termination criteria  used in detecting pattern
+    # termination criteria  used in detecting pattern, max iterations or allows minimum epsilon change per iteration.
     t_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
     # prepare corner object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     p_size = patternSize
     p_pts = np.zeros((np.prod(p_size), 3), np.float32)
     p_pts[:, :2] = np.indices(p_size).T.reshape(-1, 2)
-    p_pts *= squareSize
+    p_pts *= squareSize #default squareSize is 35.3mm, defined in eagleeye.cfg
     
     # Arrays to store object points and image points of all images
     objpts = [] # 3d points of chessboard corners in object plane
@@ -74,7 +74,8 @@ def stdCalib(imagesArr, patternSize=(9,6), squareSize=1.0, preview_path=False, f
     img_found = [] # array of images with pattern found
     num_found = 0 # number of pattern found
     total_time = 0 # Total time to process images
-    
+
+    #Iterate through chessboard images, build img and obj point correspondences arrays
     for fname in imagesArr:
         print 'Processing', os.path.basename(fname), 
         start = time.clock() # Measure time needed to process an image
@@ -144,6 +145,7 @@ def stdCalib(imagesArr, patternSize=(9,6), squareSize=1.0, preview_path=False, f
     
     # Camera Calibration flags
     # see: http://docs.opencv.org/3.0-beta/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#calibratecamera
+    #Default: only flag is cv2.CALIB_RATIONAL_MODEL (16384), this enables k4, k5, k6
     
     calib_flags = 0     # initialise cv2 calib flags
     added_flags = []    # recognised in opencv
@@ -348,7 +350,7 @@ def version():
 Prints usage of dualcalib.py
 '''
 def usage():
-    print 'usage: dualcalib.py -output <file path> -buttonside <path prefix> -backside <path prefix> {-chess_size <pattern: def. 9,6> | -square_size <in mm: def. 1.0> | -preview <preview file folder> | -config <file>}'
+    print 'usage: dualcalib.py -output <file path> -buttonside <folderPath\prefix> -backside <folderPath\prefix> {-chess_size <pattern: def. 9,6> | -square_size <in mm: def. cfg then 1.0> | -preview <preview file folder> | -config <file>}'
 
 def main(sysargs):
     args = EasyArgs(sysargs)
@@ -376,8 +378,7 @@ def main(sysargs):
         p_size = ast.literal_eval("({})".format(args.chess_size))
     else:
         p_size = cfg.default_chess
-        
-    
+
     # camera intrinsics
     buttonside_cam, buttonside_dist, buttonside_err = np.asarray([]), np.asarray([]), {}
     backside_cam, backside_dist, backside_err = np.asarray([]), np.asarray([]), {}

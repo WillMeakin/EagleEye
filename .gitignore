@@ -8,3 +8,5 @@
 /data/*
 !/data/.keep
 !/data/objects
+
+.idea
