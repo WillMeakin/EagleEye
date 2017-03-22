@@ -127,7 +127,7 @@ def main(sysargs):
                 
                 elif buttonside.isVisible((x,y,z)):
                     points = buttonside.reprojpts((x, y, z))
-                    points[0] += 960 # add 960 to x for rightside points
+                    points[0] += 960 # add 960 to x for rightside points (Ricoh video is both frames side by side)
                     side = 'buttonside'
                     count['bts'] += 1
                 
