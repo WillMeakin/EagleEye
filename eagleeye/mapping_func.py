@@ -36,17 +36,19 @@ class Mapper:
         
         
         # open intrinsic, trainer files
-        self.cam, self.distort = self.parseCamIntr(intrinsic)
+        #self.cam, self.distort = self.parseCamIntr(intrinsic)
+        self.cam = np.asarray([], dtype=np.float32) #cam matrix
+        self.distort = np.asarray([], dtype=np.float32) #dist coeffs
         self.img_pts, self.obj_pts = self.parseTrainer(trainer)
         
-        print "Camera Matrix\n", self.cam
+        #print "Camera Matrix\n", self.cam
         
         print "\nside:", Theta.name(mode)
         print "img_pts {}".format(len(self.img_pts))
         print "obj_pts {}".format(len(self.obj_pts))
         
         #calculate pose
-        self.rv, self.tv = self.calPose()
+        self.cam, self.distort, self.rv, self.tv = self.calPose()
         self.R = cv2.Rodrigues(self.rv)[0]
     
     # opens/parses the Intrinsic calib xml file.
@@ -137,23 +139,29 @@ class Mapper:
 
 
 
-        print 'obj_pts: ', self.obj_pts
-        print 'img_pts: ', self.img_pts
+        print 'obj_pts:\n', self.obj_pts
+        print 'img_pts:\n', self.img_pts
 
 
 
 
+        print 'running pnp...'
+        w=960
+        h=1080
+        rms, cam, distort, rv, tv = cv2.calibrateCamera(self.obj_pts, self.img_pts, (w, h), None, None, None, None, cv2.CALIB_RATIONAL_MODEL)
 
         # levenberg-marquardt iterative method
-        retval, rv, tv = cv2.solvePnP(
+        retval, cam, distort, rv, tv = cv2.calibrateCamera(
                             self.obj_pts, self.img_pts, 
-                            self.cam, self.distort,
+                            self.cam, None,
                             None, None, self.pnp_flags)
+        print 'done'
 
 
-
-        print 'rv: ', rv
-        print 'tv: ', tv
+        print 'cam:\n', cam
+        print 'distort:\n', distort
+        print 'rv:\n', rv
+        print 'tv:\n', tv
 
 
 
@@ -182,7 +190,7 @@ class Mapper:
         print 'Rotation Vector:\n', rv
         print 'Translation Vector:\n', tv
         
-        return rv, tv
+        return cam, distort, rv, tv
     
     def isVisible(self, pt):
         pt = np.array(pt).reshape(3, 1)
