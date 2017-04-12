@@ -77,7 +77,7 @@ def calReprojErrors(gtCoords, mapCoords, side):
 		if viconFrame in mapCoords:
 			errs[frame] = calReprojError(gtCoords[frame], mapCoords[viconFrame])
 		else:
-			print 'skipped: (C, V)', (frame, viconFrame, side)
+			print 'skipped (vicon mapped to wrong lens): (C, V, gtSide)', (frame, viconFrame, side)
 	return errs
 
 #Final reprojection error (RMS, Arthimetical mean)
