@@ -25,7 +25,7 @@ import xml.etree.ElementTree as ET
 
 
 def usage():
-	print "trace_csv.py [<csv files>] {-height | -width | -framerate | -max_height | -video_file | -codec | -image_file | -no_preview}"
+	print "trace_xml.py <xml file> {-image_file}"
 
 def getCoords(fileName):
 	coordsButton = {}
@@ -57,7 +57,7 @@ def main(sysargs):
 		return 1
 
 	if args.no_preview and not args.video_file and not args.image_file:
-		print "if -no_preview is toggled, you must a output an image"
+		print "if -no_preview is toggled, you must output an image"
 		usage()
 		return 1
 
@@ -97,7 +97,7 @@ def main(sysargs):
 		cv2.waitKey(0)
 
 		if 'image_file' in args:
-			cv2.imwrite(args.image_file+axisA+axisB+'.png', baseFrame)
+			cv2.imwrite(args.image_file+axisA.upper()+axisB.upper()+'.png', baseFrame)
 
 	displayPoints(args.image_file, btnCoords, backCoords, 'x', 'y')
 	displayPoints(args.image_file, btnCoords, backCoords, 'x', 'z')
