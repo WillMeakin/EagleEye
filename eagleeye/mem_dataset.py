@@ -20,8 +20,9 @@ class Memset:
         
         m = re.match(".*\d_(.*)\.csv", os.path.basename(path))
         if m: self._name = m.group(1)
-        else: self._name = "NameError"
-        
+        #else: self._name = "NameError" #TODO: put this back in
+        else: self._name = "EEWand"     #TODO: debugging, remove
+
         self._delim = delimiter
         self._path = path
         self._ratio = 1.0
@@ -78,6 +79,7 @@ class Memset:
     # calculate appropriate ratio from the matching video frames
     def setRatio(self, video_frames):
         self._ratio = self.total / float(video_frames)
+        print "Ratio: ", self._ratio
     
     def resetRatio(self):
         self._ratio = 1.0
