@@ -49,7 +49,7 @@ class Mapper:
         self.rv, self.tv = self.calPose()
         self.R = cv2.Rodrigues(self.rv)[0]
     
-    # opens/parses the Intrinsic calib xml file. TODO: Does it work for only k3?
+    # opens/parses the Intrinsic calib xml file.
     def parseCamIntr(self, xmlpath):
         
         cm, dc = [], []
@@ -133,13 +133,32 @@ class Mapper:
 
         # solvePnP flags
         # MUST see flag desc: http://docs.opencv.org/3.0-beta/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#solvepnp
-        
+
+
+
+
+        print 'obj_pts: ', self.obj_pts
+        print 'img_pts: ', self.img_pts
+
+
+
+
+
         # levenberg-marquardt iterative method
         retval, rv, tv = cv2.solvePnP(
                             self.obj_pts, self.img_pts, 
                             self.cam, self.distort,
                             None, None, self.pnp_flags)
-        
+
+
+
+        print 'rv: ', rv
+        print 'tv: ', tv
+
+
+
+
+
         #'''
         #NOT RUNNING
         #http://stackoverflow.com/questions/30271556/opencv-error-through-calibration-tutorial-solvepnpransac
