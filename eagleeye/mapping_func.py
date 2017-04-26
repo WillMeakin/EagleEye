@@ -13,7 +13,8 @@ magnitude = lambda x: np.sqrt(np.vdot(x, x))
 unit = lambda x: x / magnitude(x)
 
 class Mapper:
-    def __init__(self, intrinsic, trainer, cfg, mode=Theta.NonDual):
+    def __init__(self, intrinsic, trainer, cfg, initCamMat, distCoeffs, mode=Theta.NonDual):
+
         # variables
         self.rv = np.asarray([], dtype=np.float32)  # rotation
         self.tv = np.asarray([], dtype=np.float32)  # translation
@@ -33,14 +34,15 @@ class Mapper:
         else:
             print f, "is not found in cv2, reverting to Levenberg-Marquardt"
             self.pnp_flags = cv2.SOLVEPNP_ITERATIVE
-        
-        
+
         # open intrinsic, trainer files
         #self.cam, self.distort = self.parseCamIntr(intrinsic)
-        self.cam = np.asarray([], dtype=np.float32) #cam matrix
-        self.distort = np.asarray([], dtype=np.float32) #dist coeffs
+        #self.cam = np.asarray([], dtype=np.float32) #cam matrix
+        self.cam = initCamMat
+        #self.distort = np.asarray([], dtype=np.float32) #dist coeffs
+        self.distort = distCoeffs #dist coeffs
         self.img_pts, self.obj_pts = self.parseTrainer(trainer)
-        
+
         #print "Camera Matrix\n", self.cam
         
         print "\nside:", Theta.name(mode)
@@ -49,8 +51,12 @@ class Mapper:
         
         #calculate pose
         self.cam, self.distort, self.rv, self.tv = self.calPose()
-        self.R = cv2.Rodrigues(self.rv)[0]
-    
+
+        self.rv = np.asarray(self.rv)
+        self.tv = np.asarray(self.tv)
+
+        self.R = cv2.Rodrigues(np.asarray(self.rv))[0]
+
     # opens/parses the Intrinsic calib xml file.
     def parseCamIntr(self, xmlpath):
         
@@ -131,64 +137,45 @@ class Mapper:
             raise Exception("Training image points and object points must be equal in size. "
                             "image pts {}, obj pts {}".format(len(self.img_pts), len(self.obj_pts)))
 
-        print "Calculating Camera Pose using the following flags:"
+        #convert from old solvePnP format to calibrateCamera's
+        self.obj_pts = [self.obj_pts]
+        self.img_pts = [self.img_pts]
 
-        # solvePnP flags
-        # MUST see flag desc: http://docs.opencv.org/3.0-beta/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#solvepnp
-
-
-
-
-        print 'obj_pts:\n', self.obj_pts
-        print 'img_pts:\n', self.img_pts
-
-
-
-
-        print 'running pnp...'
-        w=960
+        w=960 #TODO: pull from images?
         h=1080
-        rms, cam, distort, rv, tv = cv2.calibrateCamera(self.obj_pts, self.img_pts, (w, h), None, None, None, None, cv2.CALIB_RATIONAL_MODEL)
+        #initialise cam mat
+        cam = self.cam
+        print 'camInit:\n', cam
+        distort = np.asarray(self.distort)
+        print 'distortInit: ', self.distort
 
-        # levenberg-marquardt iterative method
-        retval, cam, distort, rv, tv = cv2.calibrateCamera(
-                            self.obj_pts, self.img_pts, 
-                            self.cam, None,
-                            None, None, self.pnp_flags)
-        print 'done'
 
+        print 'running calibrateCamera...'
+        retval, cam, distort, rv, tv = cv2.calibrateCamera(self.obj_pts, self.img_pts, (w, h), cameraMatrix=cam, distCoeffs=distort, flags=cv2.CALIB_RATIONAL_MODEL+cv2.CALIB_USE_INTRINSIC_GUESS)
+
+        #Experimenting flags
+        '''flags=cv2.CALIB_RATIONAL_MODEL +
+           cv2.CALIB_USE_INTRINSIC_GUESS +
+           cv2.CALIB_FIX_FOCAL_LENGTH +
+           cv2.CALIB_FIX_PRINCIPAL_POINT +
+           cv2.CALIB_FIX_K1 +
+           cv2.CALIB_FIX_K2 +
+           cv2.CALIB_FIX_K3 +
+           cv2.CALIB_FIX_K4 +
+           cv2.CALIB_FIX_K5 +
+           cv2.CALIB_FIX_K6 + cv2.CALIB_ZERO_TANGENT_DIST)
+        '''
+
+        print 'done.'
 
         print 'cam:\n', cam
         print 'distort:\n', distort
         print 'rv:\n', rv
         print 'tv:\n', tv
-
-
-
-
-
-        #'''
-        #NOT RUNNING
-        #http://stackoverflow.com/questions/30271556/opencv-error-through-calibration-tutorial-solvepnpransac
-        #iterations = 100
-        #reproj_error = 20.0
-        #min_inliers = max(4, int(len(self.obj_pts) * 0.9))
-        #print self.cam
-        #retval, rv, tv, inliers = cv2.solvePnPRansac(
-                                      #self.obj_pts, self.img_pts, 
-                                      #self.cam, self.distort)#, 
-                                   ##None, None, False,
-                                   ##iterations, reproj_error, min_inliers)
-        ##'''
-        
-        #print rv, tv, inliers
         
         ## check, print, return
         if rv is None or rv is None or not retval:
             raise Exception("Error occurred when calculating rotation and translation vectors.")
-        
-        print 'Rotation Vector:\n', rv
-        print 'Translation Vector:\n', tv
         
         return cam, distort, rv, tv
     

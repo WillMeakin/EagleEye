@@ -9,11 +9,12 @@
 #
 
 import sys, os
+import numpy as np
 from elementtree.SimpleXMLWriter import XMLWriter
 from eagleeye import Memset, EasyArgs, EasyConfig, Mapper, Theta
 
 def usage():
-    print "usage: mapping.py -calib <calib xml> -trainer <trainer xml> -output <output dataset> [<multiple csv files>] {-map_trainer_mode | -force_side <buttonside|backside> | -config <file>}"
+    print "usage: mapping.py -trainer <trainer xml> -output <output dataset> [<multiple csv files>] {-map_trainer_mode | -force_side <buttonside|backside> | -config <file>}"
 
 def main(sysargs):
     args = EasyArgs(sysargs)
@@ -23,8 +24,8 @@ def main(sysargs):
         usage()
         return 0
     
-    if ["calib", "trainer", "output"] not in args:
-        print "Must specify: -calib, -trainer, -output files"
+    if ["trainer", "output"] not in args:
+        print "Must specify: -trainer, -output files"
         usage()
         return 1
         
@@ -50,7 +51,7 @@ def main(sysargs):
         force_back   = not force_button
     else:
         force_button = force_back = False
-    
+
     # working vars
     csvs = {}
     frame_num = 0
@@ -71,11 +72,39 @@ def main(sysargs):
     # override csv name
     if args.map_trainer_mode:
         csvs[1]._name = cfg.trainer_target
-    
+
     # open calib files
     try:
-        buttonside = Mapper(args.calib, args.trainer, cfg, Theta.Buttonside)
-        backside = Mapper(args.calib, args.trainer, cfg, Theta.Backside)
+        cam = np.zeros((3, 3))
+        cam[0, 0] = 254.127305966 #fx
+        cam[1, 1] = 255.484172972 #fy
+        cam[0, 2] = 488.175326627 #cx
+        cam[1, 2] = 478.94638883 #cy
+        cam[2, 2] = 1
+        distCoeffs = [0, 0, 0, 0, 0, 0, 0, 0]
+        distCoeffs[0] = -0.0171416537233 #k1
+        distCoeffs[1] = 0.00124838013824 #k2
+        distCoeffs[2] = -0.000477421902718 #p1
+        distCoeffs[3] = -0.000143055577271 #p2
+        distCoeffs[4] = 3.84782779449e-05 #k3
+        distCoeffs[5] = 0.116735621147 #k4
+        distCoeffs[6] = -0.00502050693142 #k5
+        distCoeffs[7] = 0.000317011928086 #k6
+        buttonside = Mapper(args.calib, args.trainer, cfg, cam, distCoeffs, Theta.Buttonside)
+        cam[0, 0] = 241.644695381 #fx
+        cam[1, 1] = 241.812653001 #fy
+        cam[0, 2] = 459.480698678 #cx
+        cam[1, 2] = 489.757300849 #cy
+        cam[2, 2] = 1
+        distCoeffs[0] = 0.00987461484022 #k1
+        distCoeffs[1] = 0.000247414863475 #k2
+        distCoeffs[2] = 0.00017787766362 #p1
+        distCoeffs[3] = 5.07307005624e-05 #p2
+        distCoeffs[4] = 8.26584785527e-06 #k3
+        distCoeffs[5] = 0.144976371435 #k4
+        distCoeffs[6] = -0.00296523619781 #k5
+        distCoeffs[7] = 9.90414253597e-05 #k6
+        backside = Mapper(args.calib, args.trainer, cfg, cam, distCoeffs, Theta.Backside)
     except Exception as e:
         print e.message
         return 1
@@ -96,6 +125,7 @@ def main(sysargs):
 
             #iterates through each vicon csv at the current row
             for i in csvs:
+                side = 'this will default to buttonside when it really shouldn\'t...'
                 c = csvs[i]
                 # determine marker quality
                 try:
