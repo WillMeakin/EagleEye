@@ -154,7 +154,7 @@ class Mapper:
         retval, cam, distort, rv, tv = cv2.calibrateCamera(self.obj_pts, self.img_pts, (w, h), cameraMatrix=cam, distCoeffs=distort, flags=cv2.CALIB_RATIONAL_MODEL+cv2.CALIB_USE_INTRINSIC_GUESS)
 
         #Experimenting flags
-        '''flags=cv2.CALIB_RATIONAL_MODEL +
+        '''cv2.CALIB_RATIONAL_MODEL +
            cv2.CALIB_USE_INTRINSIC_GUESS +
            cv2.CALIB_FIX_FOCAL_LENGTH +
            cv2.CALIB_FIX_PRINCIPAL_POINT +
