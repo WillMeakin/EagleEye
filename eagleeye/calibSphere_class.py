@@ -1,20 +1,38 @@
-import os, time, cv2, glob, math, h5py, xml.etree.ElementTree as ET, numpy as np
+import os, time, cv2, glob, math, h5py, datetime, xml.etree.ElementTree as ET, numpy as np
 from theta_sides import Theta
+from scipy.optimize import least_squares
 
 magnitude = lambda x: np.sqrt(np.vdot(x, x))
 unit = lambda x: x / magnitude(x)
 
 
 class Calibrator:
-	def __init__(self, imgPoints, objPoints, imgs):
+	def __init__(self, imgPoints, objPoints, imgPointsAbs, imgs, xc, yc):
 		np.set_printoptions(linewidth=200, threshold='inf')
 		self.imgs = imgs
+		self.xc = xc
+		self.yc = yc
+		#self.xc = 480
+		#self.yc = 540
+		print 'xc:', self.xc
+		print 'yc:', self.yc
 
-		self.img_pts, self.obj_pts = self.getPointsH5() #imgPoints, objPoints #self.getPointsH5() #self.getPoints()
+		self.c = 1
+		self.d = 0
+		self.e = 0
 
-		self.Xp = np.array([p[0] for i in self.img_pts for p in i])
+		#USE BACKSIDE .H5 POINTS OR FIND THEM IN CHESSBOARDS USING OCV
+		self.img_pts, self.obj_pts, self.imgAbs = imgPoints, objPoints, imgPointsAbs #self.getPointsH5() #img_pts already have centre subtracted
+
+		#build absolute image points (no centre subtraction
+		self.XpAbs = np.array([p[1] for i in self.imgAbs for p in i]) #x, y swap done here with indices
+		self.XpAbs = np.array(np.split(self.XpAbs, len(self.imgAbs)))
+		self.YpAbs = np.array([p[0] for i in self.imgAbs for p in i])
+		self.YpAbs = np.array(np.split(self.YpAbs, len(self.imgAbs)))
+
+		self.Xp = np.array([p[0] for i in self.img_pts for p in i]) #x, y swap NOT done here, as already done
 		self.Yp = np.array([p[1] for i in self.img_pts for p in i])
-		self.Xp = np.array(np.split(self.Xp, len(self.img_pts)))
+		self.Xp = np.array(np.split(self.Xp, len(self.img_pts))) #split into each image
 		self.Yp = np.array(np.split(self.Yp, len(self.img_pts)))
 		self.Xt = np.asarray([p[0] for p in self.obj_pts[0]])
 		self.Yt = np.asarray([p[1] for p in self.obj_pts[0]])
@@ -32,7 +50,7 @@ class Calibrator:
 		self.taylorOrder = 4
 
 		# calculate pose
-		self.RRfin, self.ss = self.calPose(self.img_pts, self.obj_pts, 9*6)
+		self.RRfin, self.ss = self.calPose(self.img_pts, self.obj_pts, 9*6) #TODO: remove hardcoded grid dim 9*6
 		self.meanErr = 0
 		self.MSE = 0
 		#self.ss = np.array([-216.63, 0, -0.00018466, 4.7064e-06, -5.0066e-09])
@@ -42,38 +60,144 @@ class Calibrator:
 		print 'SS:\n', self.ss
 
 		self.reprojectPoints(self.ss, self.RRfin)
+		self.bundleAdjustmentUrban(self.c, self.d, self.e)
 
-		self.bundleAdjustmentUrban(1, 0, 0) #c, d, e init
+		print 'RRfinAfterOpt:\n', self.RRfin
+		print 'ssAfterOp:', self.ss
+		self.reprojectPoints(self.ss, self.RRfin)
 
 	def bundleAdjustmentUrban(self, c, d, e):
 		print 'STARTING NONLINEAR REFINEMENT'
 
-		M = np.vstack((self.Xt, self.Yt, np.zeros(self.Xt.shape)))
 		ss0 = self.ss
 		x0 = np.array([1, 1, 1, 0, 0])
 		x0 = np.append(x0, np.ones(len(ss0)))
-		#x0.extend(np.ones(len(ss0), dtype=np.int))
-		print x0
 
 		offset = 6 + self.taylorOrder
 		for i in range(len(self.img_pts)):
-			R = self.RRfin[i] #TODO: UGH! is this by reference in Matlab?
+			R = np.copy(self.RRfin[i])
 			R = np.transpose(R)
 			R[2] = np.cross(R[0], R[1])
 			R = np.transpose(R)
 			r = np.array(cv2.Rodrigues(R)[0])
 			r = np.reshape(r, (3,))
-			t = self.RRfin[i][2]
+			t = np.transpose(self.RRfin[i])[2]
 			#print 'i:', i
-			#print 'RRfin[i]:\n', self.RRfin[i]
-			#print 't:', t
 
 			x0 = np.append(x0, [r[0], r[1], r[2], t[0], t[1], t[2]])
 
-		#print x0
+		print 'xo b4:\n', x0
+		x0 = least_squares(self.bundleErrUrban, x0, ftol=1e-4, xtol=1e-5) #TODO: can't set max iterations?
+		x0 = x0['x']
+		print 'x0Aft:\n', x0
+
+		RRfinOpt = np.zeros(self.RRfin.shape)
+		lauf = 0
+
+		for i in range(len(self.img_pts)):
+			RRfinOpt[i] = cv2.Rodrigues(np.array([x0[offset+lauf], x0[offset+1+lauf], x0[offset+2+lauf]]))[0]
+			RRfinOpt[i][0][2] = x0[offset+3+lauf]
+			RRfinOpt[i][1][2] = x0[offset+4+lauf]
+			RRfinOpt[i][2][2] = x0[offset+5+lauf]
+			lauf += 6
 
 
-		return -1
+		ssc = x0[5:offset]
+		self.ss = ss0 * np.transpose(ssc)
+		self.xc *= x0[1]
+		self.yc *= x0[0]
+		self.c = x0[2]
+		self.d = x0[3]
+		self.e = x0[4]
+
+		#print 'xc:', self.xc
+		#print 'yc:', self.yc
+		#print 'c, d, e:', self.c, self.d, self.e
+		self.RRfin = RRfinOpt
+
+	def bundleErrUrban(self, x):
+		M = np.vstack((self.Xt, self.Yt, np.zeros(self.Xt.shape)))
+
+		a = x[0]
+		b = x[1]
+		c = x[2]
+		d = x[3]
+		e = x[4]
+
+		offset = self.taylorOrder+6
+		ssc = x[5:offset]
+		num_points = len(M[0])
+
+		Mc = []
+		Xpp = []
+		Ypp = []
+		lauf = 0
+
+		for i in range(len(self.imgs)):
+			R = cv2.Rodrigues(np.array([x[offset+lauf], x[offset+1+lauf], x[offset+2+lauf]]))[0]
+			T = np.array([x[offset+3+lauf], x[offset+4+lauf], x[offset+5+lauf]])
+			T = np.reshape(T, (len(T), 1))
+
+			toAppend = np.transpose(np.matmul(R, M) + T*np.ones(num_points))
+			if i == 0: #Change shape so we can stack
+				Mc = np.zeros(len(toAppend[0]))
+				Xpp = np.zeros(len(self.Xp[0]))
+				Ypp = np.zeros(len(self.Yp[0]))
+			Mc = np.vstack((Mc, toAppend))
+
+			Xpp = np.vstack((Xpp, self.Xp[i]+self.yc))
+			Ypp = np.vstack((Ypp, self.Yp[i]+self.xc))
+
+			if i == 0: # delete zeroes we added
+				Mc = np.delete(Mc, 0, 0)
+				Xpp = np.delete(Xpp, 0, 0)
+				Ypp = np.delete(Ypp, 0, 0)
+
+			lauf += 6
+
+		#print 'Mc:\n', Mc
+		#print 'McT:\n', np.transpose(Mc)
+
+		#print 'Xpp:\n', Xpp
+		#print 'Ypp:\n', Ypp
+
+		#print 'ss:\n', self.ss
+		#print 'np.transpor(ssc):\n', np.transpose(ssc)
+
+		xp1, yp1 = self.omni3d2pixel(self.ss * np.transpose(ssc), np.transpose(Mc))
+
+		#print 'xp1Shape:', xp1.shape, 'yp1Shape:', yp1.shape
+		#print 'xp1:', xp1, '\nyp1:', yp1
+
+		#print 'xc:', self.xc
+		#print 'yc:', self.yc
+
+		xp = xp1*c + yp1*d + self.yc*a
+		yp = xp1*e + yp1 + self.xc*b
+
+		#print 'xpshape:\n', xp.shape
+		#print 'xp:\n', xp
+		#print 'ypshape:\n', yp.shape
+		#print 'yp:\n', yp
+
+		#print 'Xpp:\n', Xpp.shape, '\n', Xpp
+		#print 'xp:\n', xp.shape, '\n', xp
+
+		Xpp = Xpp.flatten()
+		Ypp = Ypp.flatten()
+
+		errx = Xpp - np.transpose(xp)
+		erry = Ypp - np.transpose(yp)
+		errW = np.array([])
+		errW = np.append(errW, errx)
+		errW = np.append(errW, erry)
+
+		#print 'errx:\n', errx
+		#print 'erry:\n', erry
+		#print 'errW:\n', errW
+		#print 'InX:', datetime.datetime.now().microsecond
+
+		return errW
 
 	def reprojectPoints(self, ss, RRfin):
 		print 'REPROJECTING'
@@ -90,7 +214,6 @@ class Calibrator:
 		#print 'Xt:\n', Xt
 		#print 'Yt:\n', Yt
 
-
 		xx2 = np.vstack((Xt, Yt, np.ones((len(Xt)))))
 		#print 'xx2: ', xx2.shape, '\n', xx2
 
@@ -104,26 +227,27 @@ class Calibrator:
 			#print 'XpReproj:', XpReproj.shape, '\n', XpReproj
 			#print 'YpReproj:', YpReproj.shape, '\n', YpReproj
 
-			stt = np.sqrt((self.Xp[imgi] - XpReproj)**2 + (self.Yp[imgi]-YpReproj)**2)
+			stt = np.sqrt((self.XpAbs[imgi] - self.yc - XpReproj)**2 + (self.YpAbs[imgi] - self.xc - YpReproj)**2)
 			err[counter] = np.mean(stt)
 			stderr[counter] = np.std(stt)
-			MSE += np.sum((self.Xp[imgi] - XpReproj)**2 + (self.Yp[imgi]-YpReproj)**2)
+			MSE += np.sum((self.XpAbs[imgi] - self.yc - XpReproj)**2 + (self.YpAbs[imgi] - self.xc - YpReproj)**2)
 
-			h, w = self.imgs[imgi].shape[:2]
-			yc = h / 2  # 480
-			xc = w / 2  # 540
+			#uncomment all this to see points drawn on chessboards
+			#h, w = self.imgs[imgi].shape[:2]
+			#yc = h / 2  # 480
+			#xc = w / 2  # 540
 
-			for p in range(len(self.Xp[imgi])):
-				cv2.circle(self.imgs[imgi], (int(round(self.Yp[imgi][p]+xc)), int(round(self.Xp[imgi][p]+yc))), 3, (0, 0, 255), -1)
-				cv2.circle(self.imgs[imgi], (int(round(YpReproj[p]+xc)), int(round(XpReproj[p]+yc))), 2, (0, 255, 0), -1)
-				cv2.circle(self.imgs[imgi], (xc, yc), 3, (0, 255, 255), -1)
+			#for p in range(len(self.Xp[imgi])):
+			#	cv2.circle(self.imgs[imgi], (int(round(self.Yp[imgi][p]+xc)), int(round(self.Xp[imgi][p]+yc))), 3, (0, 0, 255), -1)
+			#	cv2.circle(self.imgs[imgi], (int(round(YpReproj[p]+xc)), int(round(XpReproj[p]+yc))), 2, (0, 255, 0), -1)
+			#	cv2.circle(self.imgs[imgi], (xc, yc), 3, (0, 255, 255), -1)
 			#cv2.namedWindow('sphere', cv2.WINDOW_AUTOSIZE)
 			#cv2.imshow('sphere', self.imgs[imgi])
 			#cv2.waitKey(0)
 
 		print 'AVERAGE REPROJECTION ERROR COMPUTED FOR EACH CHESSBOARD'
-		#for i in range(len(err)):
-		#	print 'Err: ', err[i], 'std: ', stderr[i]
+		for i in range(len(err)):
+			print 'Err: ', err[i], 'std: ', stderr[i]
 
 		print 'TOTAL AVERAGE ERROR: ', np.mean(err)
 		print 'SUM OF SQUARED ERRORS: ', MSE
@@ -165,8 +289,6 @@ class Calibrator:
 		return x, y
 
 	def calPose(self, imgPts, objPts, ppp): #ppp=pointsPerPattern
-
-		#print self.obj_pts, self.img_pts
 
 		print 'running calPose...'
 
@@ -338,7 +460,7 @@ class Calibrator:
 			PP = np.asarray(PP)
 
 			PPinv = np.linalg.pinv(PP)
-			QQ = -np.asarray(np.append(MB, MD)) #TODO: WHY IS A NEGATIVE NEEDED HERE AND NOT IN MATLAB? ...transpose?
+			QQ = -np.asarray(np.append(MB, MD)) #TODO: need a negative maybe because transpose mistake? It works like this anyways.
 			QQ = QQ.reshape(len(QQ), 1)
 			#QQ1 = np.asarray(MB)
 			#QQ2 = np.asarray(MD)
@@ -349,7 +471,7 @@ class Calibrator:
 			#print 'PPinv: ', PPinv.shape, '\n', PPinv
 			#print 'QQ: ', QQ.shape, '\n', QQ
 
-			s = -np.matmul(PPinv, QQ) #TODO: AGAIN WHAT'S UP WITH THIS NEGATIVE?
+			s = -np.matmul(PPinv, QQ) #TODO: negative again? Still works fine.
 			#print 'S:\n', s
 			ss = s[0:3]
 			if ss[-1] >= 0:
@@ -360,7 +482,7 @@ class Calibrator:
 	def omni_find_parameters_fun(self, objPts, imgPts, RRfin, taylorOrder, imaProc):
 		#print 'in ofpf'
 
-		PP = np.zeros((taylorOrder+imaProc, imaProc*len(imgPts[0])*2)) #*2 coems from stacking A, C for each point
+		PP = np.zeros((taylorOrder+imaProc, imaProc*len(imgPts[0])*2)) #*2 comes from stacking A, C for each point
 		QQ = np.array([])
 		count = -1
 		initPP1Len = 0
@@ -413,7 +535,6 @@ class Calibrator:
 			#print 'PP1: ', PP1.shape, '\n', PP1
 
 			#print 'PPb4: ', PP.shape, '\n', PP
-
 
 			if imgi == 0:
 				initPP1Len = len(PP1[0])
@@ -470,7 +591,7 @@ class Calibrator:
 		# print np.degrees(inv_phi), "<", np.degrees(self.half_fov)
 		return inv_phi < self.half_fov
 
-	def reshape(self, mat):
+	def reshape(self, mat): #helper function, fixes a mistake
 
 		newMat = np.zeros((len(mat[0]), len(mat)))
 
@@ -482,7 +603,11 @@ class Calibrator:
 
 	#TODO: remove all below, debugging
 	def getMLRRfinSS(self):
-		ss = np.array([-216.63, 0, -0.00018466, 4.7064e-06, -5.0066e-09])
+		#in Matlab, use dlmwrite to write out RRfin, then read it in with this.
+		#Set ss manually
+
+		ss = np.array([-219.44, 0, 0.0012199, -2.1513e-06, 4.3635e-09])
+		#ss = np.array([-216.63, 0, -0.00018466, 4.7064e-06, -5.0066e-09])
 
 		RR = np.zeros((3, 60))
 		with open('C:\william\FINALRRFIN_ml.txt') as rrf:
@@ -525,106 +650,24 @@ class Calibrator:
 		return np.array(XpProject).astype('float'), np.array(YpProject).astype('float')
 
 	def getPointsH5(self):
+		#Use this to read in .h5 chessboard points. Used to have exact same points testable in Matlab and Python, since matlab and OCV finds slightly different corners
+
 		h5f = h5py.File('C:\william\Spherical\Scaramuzza_OCamCalib_v3.0_win\Scaramuzza_OCamCalib_v3.0_win\\backsideChessboardPts.h5', 'r')
 		readInObj = h5f['obj'][:]
 		readInImg = h5f['img'][:]
 		h5f.close()
 
-		yc = 480  # TODO: pull from images?, correct way round? Even needed?
-		xc = 540
+		imgAbs = np.copy(readInImg)
+
+		yc = 540  # TODO: pull from images?, correct way round? Even needed?, Ugh, set to opposite what's in calibSphere?
+		xc = 480
 		print 'yc: ', yc, ' xc: ', xc
 		for imgi in range(len(readInImg)):
 			for pti in range(len(readInImg[imgi])):
-				readInImg[imgi][pti][0] -= yc #subtract centre
-				readInImg[imgi][pti][1] -= xc
 				tmp = readInImg[imgi][pti][0] #swap around
 				readInImg[imgi][pti][0] = readInImg[imgi][pti][1]
 				readInImg[imgi][pti][1] = tmp
+				readInImg[imgi][pti][0] -= yc #subtract centre
+				readInImg[imgi][pti][1] -= xc
 
-
-		return readInImg, readInObj
-
-	def getPoints(self, chessboardPath):
-
-		imagesArr = glob.glob(chessboardPath + "*")
-
-		# termination criteria  used in detecting pattern, max iterations or allows minimum epsilon change per iteration.
-		t_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
-		# prepare corner object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
-		p_size = (9, 6)
-		p_pts = np.zeros((np.prod(p_size), 3), np.float32)
-		p_pts[:, :2] = np.indices(p_size).T.reshape(-1, 2)
-		p_pts *= 35.3  # default squareSize is 35.3mm, defined in eagleeye.cfg
-
-		# Arrays to store object points and image points of all images
-		objpts = []  # 3d points of chessboard corners in object plane
-		imgpts = []  # 2d points of chessboard corners in image plane
-
-		img_found = []  # array of images with pattern found
-		num_found = 0  # number of pattern found
-		total_time = 0  # Total time to process images
-
-		# Iterate through chessboard images, build img and obj point correspondences arrays
-		for fname in imagesArr:
-			print 'Processing', os.path.basename(fname),
-			start = time.clock()  # Measure time needed to process an image
-
-			# Load image and check if it exists
-			img = cv2.imread(fname)
-			if img is None:
-				print ' -  Failed to load.'
-				continue
-
-			# Convert original image to grey scale
-			grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-			# Detect chessboard pattern
-			found, corners = cv2.findChessboardCorners(grey, p_size, cv2.CALIB_CB_ADAPTIVE_THRESH)
-
-			if found:
-				print ' *** Pattern found *** ',
-				# Get image dimension -> height and width
-				h, w = img.shape[:2]
-				print 'hw', (h, w)
-				# Optimise and refine corner finding performance
-				cv2.cornerSubPix(grey, corners, (11, 11), (-1, -1), t_criteria)
-
-				imgpts.append(corners.reshape(-1, 2))
-				objpts.append(p_pts)
-
-				img_found.append(fname)
-				num_found += 1
-			else:
-				print ' - No Pattern found. - ',
-
-			t = time.clock() - start  # Seconds needed to process an image
-			print 'took', "{:.2f}".format(t), 'seconds'
-			total_time += t
-		# end pattern detection
-		# end of chessboard images
-
-		print '\n--------------------------------------------\n'
-
-		print 'Time taken to detect pattern from', len(imagesArr), 'images:', "{:.2f}".format(total_time), 'seconds.'
-
-		if num_found == 0:
-			print 'Camera Calibration failed : No chessboard pattern size of', p_size, 'has been found.'
-			print 'Please check if size of chessboard pattern is correct.'
-			raise Exception("No chessboards found")
-		elif num_found < 10:
-			print 'OpenCV requires at least 10 patterns found for an accurate calibration, please consider taking more images.'
-			print 'Chessboard pattern found in %d out of %d images.' % (num_found, len(imagesArr)), ' ({:.2%})'.format(num_found / float(len(imagesArr)))
-		else:  # >= 10
-			print 'Chessboard pattern found in %d out of %d images.' % (num_found, len(imagesArr)), ' ({:.2%})'.format(num_found / float(len(imagesArr)))
-
-
-		#print 'h', h, 'w', w
-		yc = w/2.0 #480
-		xc = h/2.0 #540
-		for imgi in range(len(imgpts)):
-			for pti in range(len(imgpts[imgi])):
-				imgpts[imgi][pti][0] -= xc
-				imgpts[imgi][pti][1] -= yc
-
-		return np.asarray(imgpts), np.asarray(objpts)
+		return readInImg, readInObj, imgAbs #Note I've done the x, y swap when building XpAbs, YpAbs in init

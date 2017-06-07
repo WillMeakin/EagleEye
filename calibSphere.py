@@ -21,6 +21,8 @@ import sys, glob, time, os, cv2, numpy as np, ast
 from datetime import datetime
 from elementtree.SimpleXMLWriter import XMLWriter
 from eagleeye import EasyArgs, EasyConfig, calibSphere_class
+import warnings
+warnings.filterwarnings('ignore')
 
 '''
 Camera Calibration (Standard Pinhole Camera)
@@ -174,17 +176,19 @@ def stdCalib(imagesArr, patternSize=(9, 6), squareSize=1.0, preview_path=False, 
 
 	print 'STARTING CALIBRATION FOR SPHERE'
 	#print 'h: ', h, 'w: ', w
-	yc = h / 2.0  # 480
-	xc = w / 2.0  # 540
+
+	imgPointsAbs = np.copy(imgpts)
+	yc = h / 2.0
+	xc = w / 2.0
 	for imgi in range(len(imgpts)):
 		for pti in range(len(imgpts[imgi])):
-			tmp = imgpts[imgi][pti][0]
+			tmp = imgpts[imgi][pti][0] #swap axes
 			imgpts[imgi][pti][0] = imgpts[imgi][pti][1]
 			imgpts[imgi][pti][1] = tmp
-			imgpts[imgi][pti][0] -= yc
+			imgpts[imgi][pti][0] -= yc #subtract centre
 			imgpts[imgi][pti][1] -= xc
 
-	calibrated = calibSphere_class.Calibrator(imgpts, objpts, imgs)
+	calibrated = calibSphere_class.Calibrator(imgpts, objpts, imgPointsAbs, imgs, xc, yc) #Note I've done the x, y swap when building XpAbs, YpAbs in init
 	print 'FINISHED CALIBRATION FOR SPHERE'
 
 
@@ -258,7 +262,7 @@ Outputs Intrinsic parameters to xmldata folder as a XML file
    - an error dict
 '''
 
-
+#
 def intWriter(path, buttonside=None, backside=None):
 	try:
 		status = ""
@@ -398,17 +402,17 @@ def main(sysargs):
 			buttonside_ss, buttonside_meanErr, buttonside_MSE = stdCalib(buttonside_images, p_size, s_size, args.preview, cfg.calib_flags)
 		if args.backside:
 			backside_images = glob.glob(args.backside + "*")
-			print 'BACkSIDE:'
+			print 'BACKSIDE:'
 			backside_ss, backside_meanErr, backside_MSE = stdCalib(backside_images, p_size, s_size, args.preview, cfg.calib_flags)
 
 		# create preview folder if specified
 		if args.preview and not os.path.exists(args.preview):
 			os.makedirs(args.preview)
 
-		# XML Output #TODO: fix this
+		# XML Output #TODO: fix this method for new format
 		intWriter(args.output,
 				  (buttonside_ss, buttonside_meanErr, buttonside_MSE),
-				  (backside_ss, backside_meanErr, backside_MSE)) #TODO: up to here, edit function
+				  (backside_ss, backside_meanErr, backside_MSE))
 
 		# Rectify
 		if args.preview:
