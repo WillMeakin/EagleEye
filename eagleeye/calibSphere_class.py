@@ -58,12 +58,15 @@ class Calibrator:
 
 		#print 'RRfin:\n', self.RRfin
 		print 'SS:\n', self.ss
-
+		print 'yc:', self.yc, '  xc:', self.xc
+		print 'c, d, e:', self.c, self.d, self.e
 		self.reprojectPoints(self.ss, self.RRfin)
 		self.bundleAdjustmentUrban(self.c, self.d, self.e)
 
-		print 'RRfinAfterOpt:\n', self.RRfin
+		#print 'RRfinAfterOpt:\n', self.RRfin
 		print 'ssAfterOp:', self.ss
+		print 'yc:', self.yc, '  xc:', self.xc
+		print 'c, d, e:', self.c, self.d, self.e
 		self.reprojectPoints(self.ss, self.RRfin)
 
 	def bundleAdjustmentUrban(self, c, d, e):
@@ -86,10 +89,10 @@ class Calibrator:
 
 			x0 = np.append(x0, [r[0], r[1], r[2], t[0], t[1], t[2]])
 
-		print 'xo b4:\n', x0
+		#print 'xo b4:\n', x0
 		x0 = least_squares(self.bundleErrUrban, x0, ftol=1e-4, xtol=1e-5) #TODO: can't set max iterations?
 		x0 = x0['x']
-		print 'x0Aft:\n', x0
+		#print 'x0Aft:\n', x0
 
 		RRfinOpt = np.zeros(self.RRfin.shape)
 		lauf = 0
@@ -223,14 +226,17 @@ class Calibrator:
 			#print 'RRfin[imgi]: ', RRfin[imgi].shape, '\n', RRfin[imgi]
 			xx = np.matmul(RRfin[imgi], xx2)
 			#print 'xx', xx.shape, '\n', xx
-			XpReproj, YpReproj = self.omni3d2pixel(ss, xx)
+			x, y = self.omni3d2pixel(ss, xx)
+			# Apply affine transformation, which includes adding centre of distortion
+			XpReproj = x*self.c + y*self.d + self.yc
+			YpReproj = x*self.e + y + self.xc
 			#print 'XpReproj:', XpReproj.shape, '\n', XpReproj
 			#print 'YpReproj:', YpReproj.shape, '\n', YpReproj
 
-			stt = np.sqrt((self.XpAbs[imgi] - self.yc - XpReproj)**2 + (self.YpAbs[imgi] - self.xc - YpReproj)**2)
+			stt = np.sqrt((self.XpAbs[imgi] - XpReproj)**2 + (self.YpAbs[imgi] - YpReproj)**2)
 			err[counter] = np.mean(stt)
 			stderr[counter] = np.std(stt)
-			MSE += np.sum((self.XpAbs[imgi] - self.yc - XpReproj)**2 + (self.YpAbs[imgi] - self.xc - YpReproj)**2)
+			MSE += np.sum((self.XpAbs[imgi] - XpReproj)**2 + (self.YpAbs[imgi] - YpReproj)**2)
 
 			#uncomment all this to see points drawn on chessboards
 			#h, w = self.imgs[imgi].shape[:2]
