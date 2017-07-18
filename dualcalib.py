@@ -174,6 +174,26 @@ def stdCalib(imagesArr, patternSize=(9,6), squareSize=1.0, preview_path=False, f
     # Perform camera calibration (standard function for pinhole camera)
     rms, camera_matrix, dist_coefs, rvecs, tvecs = cv2.calibrateCamera(objpts, imgpts, (w, h), None, None, None, None, calib_flags)
 
+    # loop through the images with detected chessboard patterns
+    # and plot detected (red) and re-rojeccted (green) points 
+    # then write out the images to the preview directory
+    if preview_path:
+        i = 0
+        for fname in img_found:
+            img = cv2.imread(fname)
+            imgpts_reproj, _ = cv2.projectPoints(objpts[i], rvecs[i], tvecs[i], camera_matrix, dist_coefs)
+            for p in range(len(imgpts_reproj[:,0,0])):
+                cv2.circle(img, (int(round(imgpts[i][p,0])), int(round(imgpts[i][p,1]))), 3, (0, 0, 255), -1)# red
+                cv2.circle(img, (int(round(imgpts_reproj[p,0,0])), int(round(imgpts_reproj[p,0,1]))), 2, (0, 255, 0), -1)# green
+            #cv2.namedWindow('reprojection', cv2.WINDOW_AUTOSIZE)
+            #cv2.imshow('reprojection', img)
+            #cv2.waitKey(0)
+            f = os.path.basename(fname).split('.')
+            reproject_path = os.path.join(preview_path, ".".join(f[:-1]) + '_reproject' + '.' + f[-1])
+            print reproject_path
+            cv2.imwrite(reproject_path, img)
+            i = i + 1
+
     # Calculate sum of error of all images specified
     imgs_error = [] # Array of images with error assigned
     total_error = 0 # Sum of error in pixels
@@ -304,7 +324,7 @@ def intWriter(path, buttonside=None, backside=None):
                                 p1=str(distCoe[0][2]), p2=str(distCoe[0][3]),
                                 k3=str(distCoe[0][4]), k4=str(distCoe[0][5]),
                                 k5=str(distCoe[0][6]), k6=str(distCoe[0][7]))
-                elif (len(distCoe[0]) == 12): # 12 coefficients Prism Model, c1, c2, c3, c4 enabled, new in OpenCV 3.0.0
+                elif (len(distCoe[0]) >= 12): # 12 coefficients Prism Model, c1, c2, c3, c4 enabled, new in OpenCV 3.0.0
                     w.element('DistCoe', 
                                 k1=str(distCoe[0][0]), k2=str(distCoe[0][1]),
                                 p1=str(distCoe[0][2]), p2=str(distCoe[0][3]),
