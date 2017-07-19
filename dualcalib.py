@@ -182,6 +182,9 @@ def stdCalib(imagesArr, patternSize=(9,6), squareSize=1.0, preview_path=False, f
         for fname in img_found:
             img = cv2.imread(fname)
             imgpts_reproj, _ = cv2.projectPoints(objpts[i], rvecs[i], tvecs[i], camera_matrix, dist_coefs)
+            i_error = cv2.norm(imgpts[i], imgpts_reproj.reshape(-1,2)) / len(imgpts_reproj)
+            print 'Average re-projetion error for image: ', i_error
+            #print 'Image name: ', fname
             for p in range(len(imgpts_reproj[:,0,0])):
                 cv2.circle(img, (int(round(imgpts[i][p,0])), int(round(imgpts[i][p,1]))), 3, (0, 0, 255), -1)# red
                 cv2.circle(img, (int(round(imgpts_reproj[p,0,0])), int(round(imgpts_reproj[p,0,1]))), 2, (0, 255, 0), -1)# green
@@ -190,7 +193,7 @@ def stdCalib(imagesArr, patternSize=(9,6), squareSize=1.0, preview_path=False, f
             #cv2.waitKey(0)
             f = os.path.basename(fname).split('.')
             reproject_path = os.path.join(preview_path, ".".join(f[:-1]) + '_reproject' + '.' + f[-1])
-            print reproject_path
+            print 'Reprojected Image name: ', reproject_path
             cv2.imwrite(reproject_path, img)
             i = i + 1
 
