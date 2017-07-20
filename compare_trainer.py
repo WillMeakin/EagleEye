@@ -306,13 +306,18 @@ def calReprojList(reprojerror_list):
     # print reprojection error at end of vid
     print "\n"
     total_error = 0.0
+    total_square_error = 0.0
     if len(reprojerror_list) > 0:
         for frm in reprojerror_list:
             total_error += float(reprojerror_list[frm]["rms"])
             
         arth_mean = total_error / len(reprojerror_list)
-        rms = sqrt(arth_mean)      # according to opencv calibrateCamera2
-        
+        #rms = sqrt(arth_mean)      # according to opencv calibrateCamera2
+        for frm in reprojerror_list:
+            total_square_error += float(reprojerror_list[frm]["rms"])**2
+        rms = sqrt(total_square_error/len(reprojerror_list) - arth_mean**2)# sample standard deviation
+
+
         print "List of Reprojection Error:"
         for reproj in reprojerror_list:
             print "Frame: {} | Reprojection Error: {}".format(reproj, reprojerror_list[reproj]["rms"])
