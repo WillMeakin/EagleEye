@@ -8,7 +8,7 @@
 # Runs mapping routines on multiple CSV files and combipnes them into a single XML format.
 #
 
-import sys, os
+import sys, os, numpy as np
 from elementtree.SimpleXMLWriter import XMLWriter
 from eagleeye import Memset, EasyArgs, EasyConfig, Mapper, Theta
 
@@ -80,7 +80,7 @@ def main(sysargs):
         print e.message
         return 1
     
-    count = {'bts':0, 'bks':0, 'rej':0}
+    count = {'both':0, 'bts':0, 'bks':0, 'rej':0}
     
     # open destination XML
     with open(args.output, "w") as xmlfile:
@@ -120,12 +120,36 @@ def main(sysargs):
                     return 1
                 
                 # run projection/mapping on VICON data
-                if backside.isVisible((x,y,z)):
+                zenith=361.
+                azimuth=361.
+                if backside.isVisible((x,y,z)) and buttonside.isVisible((x,y,z)):
+                    count['both'] += 1
+                    backside_points = backside.reprojpts((x, y, z))
+                    buttonside_points = buttonside.reprojpts((x, y, z))
+                    if(backside.zenith<buttonside.zenith):
+                        points = np.around(backside_points, decimals=1)
+                        zenith = np.around(backside.zenith, decimals=1)
+                        azimuth =  np.around(backside.azimuth, decimals=1)
+                        side = 'backside'
+                        count['bks'] += 1
+                    else:
+                        points = buttonside_points
+                        points[0] += 960 # add 960 to x for rightside points (Ricoh video is both frames side by side)
+                        zenith = np.around(buttonside.zenith, decimals=1)
+                        azimuth = np.around(buttonside.azimuth, decimals=1)
+                        side = 'buttonside'
+                        count['bts'] += 1
+
+                elif backside.isVisible((x,y,z)):
+                    zenith= np.around(backside.zenith, decimals=1)
+                    azimuth= np.around(backside.azimuth, decimals=1)
                     points = backside.reprojpts((x, y, z))
                     side = 'backside'
                     count['bks'] += 1
                 
                 elif buttonside.isVisible((x,y,z)):
+                    zenith= np.around(buttonside.zenith, decimals=1)
+                    azimuth= np.around(buttonside.azimuth, decimals=1)
                     points = buttonside.reprojpts((x, y, z))
                     points[0] += 960 # add 960 to x for rightside points (Ricoh video is both frames side by side)
                     side = 'buttonside'
@@ -162,7 +186,8 @@ def main(sysargs):
         
         w.close(doc)
         
-        print "\nbuttonside", count['bts']
+        print "\nboth", count['both']
+        print "buttonside", count['bts']
         print "backside", count['bks']
         print "rejected", count['rej']
         

@@ -48,6 +48,9 @@ class Mapper:
         #calculate pose
         self.rv, self.tv = self.calPose()
         self.R = cv2.Rodrigues(self.rv)[0]
+
+        self.zenith = 361.0
+        self.azimuth = 361.0
     
     # opens/parses the Intrinsic calib xml file. TODO: Does it work for only k3?
     def parseCamIntr(self, xmlpath):
@@ -178,6 +181,8 @@ class Mapper:
         phi = np.arccos(-pt_cam[2]/r)
         inv_phi = phi
         
+        self.zenith = (180./np.pi)*phi
+        self.azimuth =  (180./np.pi)*theta
         #print np.degrees(inv_phi), "<", np.degrees(self.half_fov)
         return inv_phi < self.half_fov
         
