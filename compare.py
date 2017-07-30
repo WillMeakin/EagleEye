@@ -93,10 +93,17 @@ def main(sysargs):
         frame = vid.frame()
         
         # draw objects from each dataset
+        notvisible = 3
         for name in xml1.data():
-            draw(frame, xml1.data()[name], cfg.xml1_colour)
+            visible = int(xml1.data()[name]["visibility"]['visible'])
+            visibleMax = int(xml1.data()[name]["visibility"]['visibleMax'])
+            if visible > (visibleMax - notvisible):
+                draw(frame, xml1.data()[name], cfg.xml1_colour)
         for name in xml2.data():
-            draw(frame, xml2.data()[name], cfg.xml2_colour)
+            visible = int(xml2.data()[name]["visibility"]['visible'])
+            visibleMax = int(xml2.data()[name]["visibility"]['visibleMax'])
+            if visible > (visibleMax - notvisible):
+                draw(frame, xml2.data()[name], cfg.xml2_colour)
         
         # print status to screen
         displayText(frame, vid.status(), top=True)
