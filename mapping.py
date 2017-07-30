@@ -160,6 +160,11 @@ def main(sysargs):
                     points = [0.,0.]
                     count['rej'] += 1
                 
+                # if VICON position is (0,0,0) set visible_reflectors to 0 to indicate bad data
+                vicon_norm = np.linalg.norm(np.array([x,y,z]))
+                if not vicon_norm > 0.:
+                    visible_reflectors = 0
+
                 # TODO: Change DTD and double check with Manjung
                 w.start("object", id=str(i), name=c.name(), lens=Theta.name(side))
                 w.element("boxinfo", height="99", width="99", x=str(points[0]-50), y=str(points[1]-50))
