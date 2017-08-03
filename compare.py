@@ -15,7 +15,7 @@ from eagleeye import BuffSplitCap, Xmlset, EasyArgs, EasyConfig, Key, marker_too
 from eagleeye.display_text import *
 
 def usage():
-    print "usage: compare.py <video file> <xml dataset> <xml dataset> {<mark_in> <mark_out> | -config <file> | -export <file>}"
+    print "usage: compare.py <video file> <xml MAP dataset> <xml ANT dataset> {<mark_in> <mark_out> | -config <file> | -export <file>}"
 
 def draw(frame, obj, colour):
     pt1 = (int(float(obj['box']['x'])), 
@@ -94,16 +94,13 @@ def main(sysargs):
         
         # draw objects from each dataset
         notvisible = 3
-        for name in xml1.data():
+        for name in xml1.data():# MAP data set (i.e. ground truth data)
             visible = int(xml1.data()[name]["visibility"]['visible'])
             visibleMax = int(xml1.data()[name]["visibility"]['visibleMax'])
             if visible > (visibleMax - notvisible):
                 draw(frame, xml1.data()[name], cfg.xml1_colour)
-        for name in xml2.data():
-            visible = int(xml2.data()[name]["visibility"]['visible'])
-            visibleMax = int(xml2.data()[name]["visibility"]['visibleMax'])
-            if visible > (visibleMax - notvisible):
-                draw(frame, xml2.data()[name], cfg.xml2_colour)
+        for name in xml2.data():# ANT dataset (i.e. vision system result)
+            draw(frame, xml2.data()[name], cfg.xml2_colour)
         
         # print status to screen
         displayText(frame, vid.status(), top=True)
