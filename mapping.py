@@ -168,7 +168,7 @@ def main(sysargs):
                 # TODO: Change DTD and double check with Manjung
                 w.start("object", id=str(i), name=c.name(), lens=Theta.name(side))
                 w.element("boxinfo", height="99", width="99", x=str(points[0]-50), y=str(points[1]-50))
-                w.element("centroid", x=str(points[0]), y=str(points[1]), rx=str(rx), ry=str(ry), rz=str(rz))
+                w.element("centroid", x=str(points[0]), y=str(points[1]))
                 w.element("visibility", visible=str(visible_reflectors), visibleMax=str(max_reflectors))
                 w.end()
                 
